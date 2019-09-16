@@ -14,7 +14,6 @@ class Esoteric {
             return img;
         };
 
-        console.log(baseThis.Render.context);
         this.Render.contextToTransform = transform => {
             this.Render.context.translate(transform.position.x, transform.position.y);
             this.Render.context.rotate(transform.rotation);
@@ -45,6 +44,32 @@ class Esoteric {
         }
         this.Render.SpriteRenderSystem = SpriteRenderSystem;
         // END RENDER
+
+        // BEGIN WIREFRAME RENDER
+        class WireframeRenderSystem {
+            constructor() { }
+            run() {
+                for (let b of baseThis.world.bodies)
+                    this.action(b);
+            }
+            action(body) {
+                const ctx = baseThis.Render.context;
+                if (body.vertices.length > 0) {
+                    const first = body.vertices[0];
+                    ctx.beginPath();
+                    ctx.moveTo(first.x, first.y);
+                    for (let i = 1; i < body.vertices.length; i++) {
+                        const v = body.vertices[i];
+                        ctx.lineTo(v.x, v.y);
+                    }
+                    ctx.lineTo(first.x, first.y);
+                    ctx.stroke();
+                    ctx.closePath();
+                }
+            }
+        }
+        this.Render.WireframeRenderSystem = WireframeRenderSystem;
+        // END WIREFRAME RENDER
 
         // BEGIN PHYSICS
         this._engine = Matter.Engine.create();
@@ -188,14 +213,18 @@ class Esoteric {
     
     createRectangle(x, y, w, h, options = undefined) {
         const rect = Matter.Bodies.rectangle(x, y, w, h, options);
-        Matter.World.addBody(this.world, rect);
+        Matter.Composite.addBody(this.world, rect);
         return rect;
     }
 
     createCircle(x, y, r, options = undefined) {
         const circ = Matter.Bodies.circle(x, y, r, options);
-        Matter.World.addBody(this.world, circ);
+        Matter.Composite.addBody(this.world, circ);
         return circ;
+    }
+
+    destroyBody(body) {
+        Matter.Composite.remove(this.world, body);
     }
 
     addEventListener(eventName, action) {
