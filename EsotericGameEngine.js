@@ -5,8 +5,8 @@ class Esoteric {
         this.Render = {};
         this.Render.canvas = canvas;
         this.Render.context = canvas.getContext("2d");
-        this.Render.context.save();
         this.Render.clearCanvas = () => this.Render.context.clearRect(0, 0, this.Render.canvas.width, this.Render.canvas.height);
+        this.Render.resetContext = () => this.Render.context.setTransform(1, 0, 0, 1, 0, 0);
         this.Render.imageDirectory = "Images/";
         this.Render.getImage = path => {
             const img = new Image();
@@ -14,7 +14,8 @@ class Esoteric {
             return img;
         };
 
-        this.Render.contextTo = transform => {
+        console.log(baseThis.Render.context);
+        this.Render.contextToTransform = transform => {
             this.Render.context.translate(transform.position.x, transform.position.y);
             this.Render.context.rotate(transform.rotation);
         };
@@ -26,6 +27,7 @@ class Esoteric {
                 this.image = img;
                 this.transform = transform;
                 this.offset = Esoteric.vector2(offsetX, offsetY);
+                this.scale = Esoteric.vector2(1, 1);
             }
         }
         this.Render.Sprite = Sprite;
@@ -35,9 +37,10 @@ class Esoteric {
                 super(Sprite);
             }
             action(sprite) {
-                baseThis.Render.contextTo(sprite.transform);
+                baseThis.Render.contextToTransform(sprite.transform);
+                baseThis.Render.context.scale(sprite.scale.x, sprite.scale.y);
                 baseThis.Render.context.drawImage(sprite.image, sprite.offset.x, sprite.offset.y, sprite.image.width, sprite.image.height);
-                baseThis.Render.context.restore();
+                baseThis.Render.resetContext();
             }
         }
         this.Render.SpriteRenderSystem = SpriteRenderSystem;
@@ -48,6 +51,121 @@ class Esoteric {
         this._world = this._engine.world;
         this._engineStarted = false;
         // END PHYSICS
+
+        // BEGIN INPUT
+        class Input extends Esoteric.Base.Entity {
+            static ALL = [];
+            constructor(condition) {
+                super(Input);
+                this.condition = condition;
+            }
+            get value() {
+                return this.condition.value;
+            }
+        }
+        this.Input = Input;
+        class Condition {
+            constructor(keyCode) {
+                this.keyCode = keyCode;
+                this.on = false;
+                this._onInput = (e) => {
+                    switch (e.keyCode) {
+                        case this.keyCode:
+                            this.on = true;
+                            return;
+                    }
+                };
+                this._offInput = (e) => {
+                    switch (e.keyCode) {
+                        case this.keyCode:
+                            this.on = false;
+                            return;
+                    }
+                };
+                window.addEventListener('keydown', this._onInput);
+                window.addEventListener('keyup', this._offInput);
+            }
+            destroy() {
+                window.removeEventListener('keydown', this._onInput);
+                window.removeEventListener('keyup', this._offInput);
+            }
+        }
+        class NumberCondition {
+            constructor(keyCodeUp, keyCodeDown) {
+                this.conditionUp = new Condition(keyCodeUp);
+                this.conditionDown = new Condition(keyCodeDown);
+                this.value = 0;
+                this.rise = 1;
+                this.gravity = 1;
+            }
+            upOn() {
+                this.value += this.rise;
+                if (this.value > 1) this.value = 1;
+            }
+            downOn() {
+                this.value -= this.rise;
+                if (this.value < -1) this.value = -1;
+            }
+            off() {
+                if (this.value > 0)
+                    this.value -= this.gravity;
+                else if (this.value < 0)
+                    this.value += this.gravity;
+            }
+            action() {
+                if (this.conditionUp.on) {
+                    this.upOn();
+                } else if (this.conditionDown.on) {
+                    this.downOn();
+                } else {
+                    this.off();
+                }
+            }
+            destroy() {
+                this.conditionUp.destroy();
+                this.conditionDown.destroy();
+            }
+        }
+        Input.NumberCondition = NumberCondition;
+        Input.createNumberInput = (keyCodeUp, keyCodeDown) => {
+            const input = new Input();
+            input.condition = new NumberCondition(keyCodeUp, keyCodeDown);
+            return input;
+        };
+        class Vector2Condition {
+            constructor(keyCodeUpX, keyCodeDownX, keyCodeUpY, keyCodeDownY) {
+                this.conditionX = new NumberCondition(keyCodeUpX, keyCodeDownX);
+                this.conditionY = new NumberCondition(keyCodeUpY, keyCodeDownY);
+                this.value = Esoteric.vector2(0, 0);
+            }
+            action() {
+                this.conditionX.action();
+                this.value.x = this.conditionX.value;
+                this.conditionY.action();
+                this.value.y = this.conditionY.value;
+            }
+            destroy() {
+                this.valueX.destroy();
+                this.valueY.destroy();
+            }
+        }
+        Input.Vector2Condition = Vector2Condition;
+        Input.createVector2Input = (keyCodeUpX, keyCodeDownX, keyCodeUpY, keyCodeDownY) => {
+            const input = new Input();
+            input.condition = new Vector2Condition(keyCodeUpX, keyCodeDownX, keyCodeUpY, keyCodeDownY);
+            return input;
+        };
+    
+        class InputSystem extends Esoteric.Base.System {
+            constructor() {
+                super(Input);
+            }
+            action(input) {
+                input.condition.action();
+            }
+        }
+        this.Input.InputSystem = InputSystem;
+        // END INPUT
     }
     get engine() {
         return this._engine;
@@ -68,10 +186,28 @@ class Esoteric {
         clearInterval(this._startEngineInterval);
     }
     
-    createRectangle(x, y, w, h, options=undefined) {
+    createRectangle(x, y, w, h, options = undefined) {
         const rect = Matter.Bodies.rectangle(x, y, w, h, options);
         Matter.World.addBody(this.world, rect);
         return rect;
+    }
+
+    createCircle(x, y, r, options = undefined) {
+        const circ = Matter.Bodies.circle(x, y, r, options);
+        Matter.World.addBody(this.world, circ);
+        return circ;
+    }
+
+    addEventListener(eventName, action) {
+        Matter.Events.on(this.engine, eventName, action);
+    }
+
+    removeEventListener(eventName, action) {
+        Matter.Events.off(this.engine, eventName, action);
+    }
+
+    triggerEvents(eventName) {
+        Matter.Events.trigger(this.engine, eventName);
     }
 
     static vector2(x, y) {
