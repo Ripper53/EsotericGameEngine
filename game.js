@@ -1,4 +1,3 @@
-
 class Game {
     constructor(eso) {
         this.eso = eso;
@@ -27,6 +26,12 @@ class Game {
             }
         }
 
+        class OnewayGround extends Ground {
+            constructor(body) {
+                super(body);
+                body.collisionFilter.category = 2;
+            }
+        }
 
         class Character extends Esoteric.Base.Entity {
             static ALL = [];
@@ -56,16 +61,22 @@ class Game {
                         return false;
                     }
                 };
+                this.speed = 0.01;
                 this.jumpForce = Esoteric.vector2(0.05, 0.2);
                 this.stunned = false;
+                this.body.collisionFilter.mask ^= 2;
             }
 
             get body() {
                 return this.rigidbody.body;
             }
 
+            goingDown() {
+                return this.body.velocity.y > -0.01;
+            }
+
             isGrounded() {
-                return this.body.velocity.y > -0.01 && this.ground.check();
+                return this.goingDown() && this.ground.check();
             }
 
             canJump() {
@@ -85,7 +96,10 @@ class Game {
 
             addMovement(x) {
                 if (this.stunned) return;
-                this.body.force.x += x;
+                if (x > 0)
+                    this.body.force.x += this.speed;
+                else if (x < 0)
+                    this.body.force.x -= this.speed;
             }
             
             destroy() {
@@ -101,13 +115,43 @@ class Game {
             action(character) {
                 const p = character.transform.position, o = character.ground.offset;
                 Matter.Body.setPosition(character.ground.sensor, Esoteric.vector2(p.x + o.x, p.y + o.y));
-                character.body.frictionAir = character.isGrounded() ? character.ground.friction : 0;
+                const b = character.body;
+                b.frictionAir = character.isGrounded() ? character.ground.friction : 0;
+                b.collisionFilter.mask = character.goingDown() ? Esoteric.onFlag(b.collisionFilter.mask, 2) : Esoteric.offFlag(b.collisionFilter.mask, 2);
             }
         }
+
+        class AI extends Esoteric.Base.Entity {
+            static ALL = [];
+            constructor(character) {
+                this.character = character;
+            }
+
+            action() { }
+
+            destroy() {
+                super.destroy();
+                this.character.destroy();
+            }
+        }
+
+        class AISystem extends Esoteric.Base.System {
+            constructor() {
+                super(AI);
+            }
+
+            action(ai) {
+                ai.action();
+            }
+        }
+
         this.Base = {
             Ground,
+            OnewayGround,
             Character,
-            CharacterSystem
+            CharacterSystem,
+            AI,
+            AISystem
         };
     }
 

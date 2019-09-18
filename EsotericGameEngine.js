@@ -18,6 +18,31 @@ class Esoteric {
             this.Render.context.translate(transform.position.x, transform.position.y);
             this.Render.context.rotate(transform.rotation);
         };
+
+        class Camera extends Esoteric.Base.Entity {
+            static ALL = [];
+            constructor(transform) {
+                super(Camera);
+                this.transform = transform;
+                this._t = new Esoteric.Base.Transform();
+            }
+
+            getTransformFromSprite(sprite) {
+                this._t.position.x = sprite.transform.position.x - baseThis.Render.Camera.main.transform.position.x + (baseThis.Render.canvas.width / 2);
+                this._t.position.y = sprite.transform.position.y - baseThis.Render.Camera.main.transform.position.y + (baseThis.Render.canvas.height / 2);
+                this._t.rotation = sprite.transform.rotation - baseThis.Render.Camera.main.transform.rotation;
+                return this._t;
+            }
+
+            getTransformFromBody(body) {
+                this._t.position.x = -baseThis.Render.Camera.main.transform.position.x + (baseThis.Render.canvas.width / 2);
+                this._t.position.y = -baseThis.Render.Camera.main.transform.position.y + (baseThis.Render.canvas.height / 2);
+                this._t.rotation = body.angle - baseThis.Render.Camera.main.transform.rotation;
+                return this._t;
+            }
+        }
+        this.Render.Camera = Camera;
+        this.Render.Camera.main = new Camera(new Esoteric.Base.Transform());
     
         class Sprite extends Esoteric.Base.Entity {
             static ALL = [];
@@ -34,9 +59,10 @@ class Esoteric {
         class SpriteRenderSystem extends Esoteric.Base.System {
             constructor() {
                 super(Sprite);
+                this._t = new Esoteric.Base.Transform();
             }
             action(sprite) {
-                baseThis.Render.contextToTransform(sprite.transform);
+                baseThis.Render.contextToTransform(baseThis.Render.Camera.main.getTransformFromSprite(sprite));
                 baseThis.Render.context.scale(sprite.scale.x, sprite.scale.y);
                 baseThis.Render.context.drawImage(sprite.image, sprite.offset.x, sprite.offset.y, sprite.image.width, sprite.image.height);
                 baseThis.Render.resetContext();
@@ -53,16 +79,18 @@ class Esoteric {
                     this.action(b);
             }
             action(body) {
-                const ctx = baseThis.Render.context;
                 if (body.vertices.length > 0) {
-                    const first = body.vertices[0];
+                    const ctx = baseThis.Render.context,
+                          offset = baseThis.Render.Camera.main.getTransformFromBody(body),
+                          p = offset.position,
+                          first = body.vertices[0];
                     ctx.beginPath();
-                    ctx.moveTo(first.x, first.y);
+                    ctx.moveTo(first.x + p.x, first.y + p.y);
                     for (let i = 1; i < body.vertices.length; i++) {
                         const v = body.vertices[i];
-                        ctx.lineTo(v.x, v.y);
+                        ctx.lineTo(v.x + p.x, v.y + p.y);
                     }
-                    ctx.lineTo(first.x, first.y);
+                    ctx.lineTo(first.x + p.x, first.y + p.y);
                     ctx.stroke();
                     ctx.closePath();
                 }
@@ -152,11 +180,7 @@ class Esoteric {
             }
         }
         Input.NumberCondition = NumberCondition;
-        Input.createNumberInput = (keyCodeUp, keyCodeDown) => {
-            const input = new Input();
-            input.condition = new NumberCondition(keyCodeUp, keyCodeDown);
-            return input;
-        };
+        Input.createNumberInput = (keyCodeUp, keyCodeDown) => new Input(new NumberCondition(keyCodeUp, keyCodeDown));
         class Vector2Condition {
             constructor(keyCodeUpX, keyCodeDownX, keyCodeUpY, keyCodeDownY) {
                 this.conditionX = new NumberCondition(keyCodeUpX, keyCodeDownX);
@@ -175,11 +199,7 @@ class Esoteric {
             }
         }
         Input.Vector2Condition = Vector2Condition;
-        Input.createVector2Input = (keyCodeUpX, keyCodeDownX, keyCodeUpY, keyCodeDownY) => {
-            const input = new Input();
-            input.condition = new Vector2Condition(keyCodeUpX, keyCodeDownX, keyCodeUpY, keyCodeDownY);
-            return input;
-        };
+        Input.createVector2Input = (keyCodeUpX, keyCodeDownX, keyCodeUpY, keyCodeDownY) => new Input(new Vector2Condition(keyCodeUpX, keyCodeDownX, keyCodeUpY, keyCodeDownY));
     
         class InputSystem extends Esoteric.Base.System {
             constructor() {
@@ -246,6 +266,26 @@ class Esoteric {
     static removeFromArray(array, value) {
         const index = array.findIndex(v => v === value);
         if (index > -1) array.splice(index, 1);
+    }
+
+    static hasFlag(value, flag) {
+        return (value & flag) === flag;
+    }
+
+    static hasOneFlag(value, flag) {
+        return (value & flag) !== 0;
+    }
+
+    static onFlag(value, flag) {
+        return value | flag;
+    }
+
+    static offFlag(value, flag) {
+        return Esoteric.hasFlag(value, flag) ? (value ^ flag) : value;
+    }
+
+    static lerp(value, target, percentage) {
+        return ((target - value) * percentage) + value;
     }
 }
 

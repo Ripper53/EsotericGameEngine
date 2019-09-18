@@ -34,30 +34,39 @@ const game = new Game();
     new game.Base.Ground(border2);
     new game.Base.Ground(border3);
     new game.Base.Ground(border4);
+
+    new game.Base.OnewayGround(Eso.createRectangle(w / 2, h / 2, 50, 10, ops));
 })();
 
 (() => {
-    const characterSystem = new game.Base.CharacterSystem();
-    Eso.addEventListener("afterUpdate", () => {
-        characterSystem.run();
-    });
+    const characterSystem = new game.Base.CharacterSystem(),
+          aiSystem = new game.Base.AISystem();
 
     const img = Eso.Render.getImage("Characters/Player.png");
     img.width = 50;
     img.height = 50;
     const c = new game.Base.Character(60, 60, 25, img);
 
+    const offset = Esoteric.vector2(0, -50);
+    Eso.addEventListener("afterUpdate", () => {
+        characterSystem.run();
+        aiSystem.run();
+        const t = Eso.Render.Camera.main.transform;
+        t.position.x = Esoteric.lerp(t.position.x, c.body.position.x + offset.x, 0.25);
+        t.position.y = Esoteric.lerp(t.position.y, c.body.position.y + offset.y, 0.25);
+    });
+
     const movement = Eso.Input.createVector2Input(68, 65, 87, 83);
     
-    const speed = 0.01, jumpForce = Esoteric.vector2(0.05, 0.2);
+    
     Eso.addEventListener('beforeUpdate', () => {
-        const v = movement.value, b = c.rigidbody.body, s = c.sprite;
+        const v = movement.value, s = c.sprite;
         if (c.isGrounded()) {
             if (v.x > 0) {
-                c.addMovement(speed);
+                c.addMovement(1);
                 s.scale.x = 1;
             } else if (v.x < 0) {
-                c.addMovement(-speed);
+                c.addMovement(-1);
                 s.scale.x = -1;
             }
         }
